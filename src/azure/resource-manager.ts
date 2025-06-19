@@ -122,6 +122,36 @@ export interface CreateContainerRegistryParams {
   subscriptionId?: string;
 }
 
+// Common CRUD interfaces
+export interface GetResourceParams {
+  name: string;
+  resourceGroupName: string;
+  subscriptionId?: string;
+}
+
+export interface ListResourceParams {
+  resourceGroupName?: string;
+  subscriptionId?: string;
+}
+
+export interface DeleteResourceParams {
+  name: string;
+  resourceGroupName: string;
+  subscriptionId?: string;
+}
+
+export interface ControlVMParams {
+  name: string;
+  resourceGroupName: string;
+  subscriptionId?: string;
+  deallocate?: boolean;
+}
+
+export interface DeleteVMParams extends DeleteResourceParams {
+  deleteDisks?: boolean;
+  deleteNetworkInterfaces?: boolean;
+}
+
 export class AzureResourceManager {
   private auth: AzureAuth;
   private smartDefaults: SmartDefaults;
@@ -609,6 +639,355 @@ export class AzureResourceManager {
         throw error;
       }
     }
+  }
+
+  // Storage Account CRUD
+  async getStorageAccount(params: GetResourceParams): Promise<StorageAccount> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getStorageClient(subscriptionId);
+    return await client.storageAccounts.getProperties(params.resourceGroupName, params.name);
+  }
+
+  async listStorageAccounts(params: ListResourceParams): Promise<StorageAccount[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getStorageClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const account of client.storageAccounts.listByResourceGroup(params.resourceGroupName)) {
+        result.push(account);
+      }
+    } else {
+      for await (const account of client.storageAccounts.list()) {
+        result.push(account);
+      }
+    }
+    return result;
+  }
+
+  async deleteStorageAccount(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getStorageClient(subscriptionId);
+    await client.storageAccounts.delete(params.resourceGroupName, params.name);
+  }
+
+  // Web App CRUD
+  async getWebApp(params: GetResourceParams): Promise<Site> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    return await client.webApps.get(params.resourceGroupName, params.name);
+  }
+
+  async listWebApps(params: ListResourceParams): Promise<Site[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const app of client.webApps.listByResourceGroup(params.resourceGroupName)) {
+        result.push(app);
+      }
+    } else {
+      for await (const app of client.webApps.list()) {
+        result.push(app);
+      }
+    }
+    return result;
+  }
+
+  async startWebApp(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    await client.webApps.start(params.resourceGroupName, params.name);
+  }
+
+  async stopWebApp(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    await client.webApps.stop(params.resourceGroupName, params.name);
+  }
+
+  async restartWebApp(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    await client.webApps.restart(params.resourceGroupName, params.name);
+  }
+
+  async deleteWebApp(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getWebSiteClient(subscriptionId);
+    await client.webApps.delete(params.resourceGroupName, params.name);
+  }
+
+  // Virtual Machine CRUD
+  async getVirtualMachine(params: GetResourceParams): Promise<VirtualMachine> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    return await client.virtualMachines.get(params.resourceGroupName, params.name);
+  }
+
+  async listVirtualMachines(params: ListResourceParams): Promise<VirtualMachine[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const vm of client.virtualMachines.list(params.resourceGroupName)) {
+        result.push(vm);
+      }
+    } else {
+      for await (const vm of client.virtualMachines.listAll()) {
+        result.push(vm);
+      }
+    }
+    return result;
+  }
+
+  async startVirtualMachine(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    await client.virtualMachines.beginStartAndWait(params.resourceGroupName, params.name);
+  }
+
+  async stopVirtualMachine(params: ControlVMParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    
+    if (params.deallocate) {
+      await client.virtualMachines.beginDeallocateAndWait(params.resourceGroupName, params.name);
+    } else {
+      await client.virtualMachines.beginPowerOffAndWait(params.resourceGroupName, params.name);
+    }
+  }
+
+  async restartVirtualMachine(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    await client.virtualMachines.beginRestartAndWait(params.resourceGroupName, params.name);
+  }
+
+  async deleteVirtualMachine(params: DeleteVMParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getComputeClient(subscriptionId);
+    await client.virtualMachines.beginDeleteAndWait(params.resourceGroupName, params.name);
+  }
+
+  // SQL Database CRUD
+  async getSqlDatabase(params: { name: string; serverName: string; resourceGroupName: string; subscriptionId?: string }): Promise<Database> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getSqlClient(subscriptionId);
+    return await client.databases.get(params.resourceGroupName, params.serverName, params.name);
+  }
+
+  async listSqlDatabases(params: { serverName: string; resourceGroupName: string; subscriptionId?: string }): Promise<Database[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getSqlClient(subscriptionId);
+    
+    const result = [];
+    for await (const db of client.databases.listByServer(params.resourceGroupName, params.serverName)) {
+      result.push(db);
+    }
+    return result;
+  }
+
+  async deleteSqlDatabase(params: { name: string; serverName: string; resourceGroupName: string; subscriptionId?: string }): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getSqlClient(subscriptionId);
+    await client.databases.beginDeleteAndWait(params.resourceGroupName, params.serverName, params.name);
+  }
+
+  // Key Vault CRUD
+  async getKeyVault(params: GetResourceParams): Promise<Vault> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getKeyVaultClient(subscriptionId);
+    return await client.vaults.get(params.resourceGroupName, params.name);
+  }
+
+  async listKeyVaults(params: ListResourceParams): Promise<Vault[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getKeyVaultClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const vault of client.vaults.listByResourceGroup(params.resourceGroupName)) {
+        result.push(vault);
+      }
+    } else {
+      for await (const vault of client.vaults.listBySubscription()) {
+        result.push(vault);
+      }
+    }
+    return result;
+  }
+
+  async deleteKeyVault(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getKeyVaultClient(subscriptionId);
+    await client.vaults.delete(params.resourceGroupName, params.name);
+  }
+
+  // Container Instance CRUD
+  async getContainerInstance(params: GetResourceParams): Promise<ContainerGroup> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerInstanceClient(subscriptionId);
+    return await client.containerGroups.get(params.resourceGroupName, params.name);
+  }
+
+  async listContainerInstances(params: ListResourceParams): Promise<ContainerGroup[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerInstanceClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const group of client.containerGroups.listByResourceGroup(params.resourceGroupName)) {
+        result.push(group);
+      }
+    } else {
+      for await (const group of client.containerGroups.list()) {
+        result.push(group);
+      }
+    }
+    return result;
+  }
+
+  async startContainerInstance(params: GetResourceParams): Promise<void> {
+    // Container instances don't have start/stop/restart methods in the API
+    // They are managed through create/delete operations
+    throw new Error('Container instances cannot be started directly. They start automatically when created.');
+  }
+
+  async stopContainerInstance(params: GetResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerInstanceClient(subscriptionId);
+    // Container instances are stopped by deleting and recreating
+    // This is a placeholder - in practice, you'd need to recreate with different restart policy
+    throw new Error('Container instances cannot be stopped directly. Use delete and recreate instead.');
+  }
+
+  async deleteContainerInstance(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerInstanceClient(subscriptionId);
+    await client.containerGroups.beginDeleteAndWait(params.resourceGroupName, params.name);
+  }
+
+  // Virtual Network CRUD
+  async getVirtualNetwork(params: GetResourceParams): Promise<VirtualNetwork> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getNetworkClient(subscriptionId);
+    return await client.virtualNetworks.get(params.resourceGroupName, params.name);
+  }
+
+  async listVirtualNetworks(params: ListResourceParams): Promise<VirtualNetwork[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getNetworkClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const vnet of client.virtualNetworks.list(params.resourceGroupName)) {
+        result.push(vnet);
+      }
+    } else {
+      for await (const vnet of client.virtualNetworks.listAll()) {
+        result.push(vnet);
+      }
+    }
+    return result;
+  }
+
+  async deleteVirtualNetwork(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getNetworkClient(subscriptionId);
+    await client.virtualNetworks.beginDeleteAndWait(params.resourceGroupName, params.name);
+  }
+
+  // Cosmos DB CRUD
+  async getCosmosDb(params: GetResourceParams): Promise<any> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getCosmosDbClient(subscriptionId);
+    return await client.databaseAccounts.get(params.resourceGroupName, params.name);
+  }
+
+  async listCosmosDb(params: ListResourceParams): Promise<any[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getCosmosDbClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const account of client.databaseAccounts.listByResourceGroup(params.resourceGroupName)) {
+        result.push(account);
+      }
+    } else {
+      for await (const account of client.databaseAccounts.list()) {
+        result.push(account);
+      }
+    }
+    return result;
+  }
+
+  async deleteCosmosDb(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getCosmosDbClient(subscriptionId);
+    await client.databaseAccounts.beginDeleteAndWait(params.resourceGroupName, params.name);
+  }
+
+  // Redis Cache CRUD
+  async getRedisCache(params: GetResourceParams): Promise<RedisResource> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getRedisClient(subscriptionId);
+    return await client.redis.get(params.resourceGroupName, params.name);
+  }
+
+  async listRedisCache(params: ListResourceParams): Promise<RedisResource[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getRedisClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const cache of client.redis.listByResourceGroup(params.resourceGroupName)) {
+        result.push(cache);
+      }
+    } else {
+      for await (const cache of client.redis.listBySubscription()) {
+        result.push(cache);
+      }
+    }
+    return result;
+  }
+
+  async deleteRedisCache(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getRedisClient(subscriptionId);
+    await client.redis.beginDeleteAndWait(params.resourceGroupName, params.name);
+  }
+
+  // Container Registry CRUD
+  async getContainerRegistry(params: GetResourceParams): Promise<Registry> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerRegistryClient(subscriptionId);
+    return await client.registries.get(params.resourceGroupName, params.name);
+  }
+
+  async listContainerRegistries(params: ListResourceParams): Promise<Registry[]> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerRegistryClient(subscriptionId);
+    
+    const result = [];
+    if (params.resourceGroupName) {
+      for await (const registry of client.registries.listByResourceGroup(params.resourceGroupName)) {
+        result.push(registry);
+      }
+    } else {
+      for await (const registry of client.registries.list()) {
+        result.push(registry);
+      }
+    }
+    return result;
+  }
+
+  async deleteContainerRegistry(params: DeleteResourceParams): Promise<void> {
+    const subscriptionId = this.auth.getSubscriptionId(params.subscriptionId);
+    const client = this.getContainerRegistryClient(subscriptionId);
+    await client.registries.beginDeleteAndWait(params.resourceGroupName, params.name);
   }
 
   private async ensureResourceGroupExists(
